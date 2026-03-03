@@ -1,10 +1,16 @@
 import time
 import random
 import requests
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 app = FastAPI(title="ScanOps API", version="1.0.0")
 
@@ -16,9 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Apni API Keys yahan daalo ─────────────────────────────────────────────────
-GOOGLE_API_KEY = "AIzaSyDnKyv5MwB8BYZ0eFfTH9-ZRLrG7Lk_vDM"    # console.cloud.google.com se lo
-SEARCH_ENGINE_ID = "716edaf1fe2ab4368"  # programmablesearchengine.google.com se lo
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+SEARCH_ENGINE_ID = os.getenv("SEARCH_ENGINE_ID")
 
 class URLList(BaseModel):
     urls: List[str]
@@ -61,7 +66,7 @@ def get_index_status(url: str) -> dict:
                 return {
                     "url": clean_url,
                     "status": "Error",
-                    "message": "API Key galat hai. main.py mein check karo."
+                    "message": "API Key galat hai. .env file check karo."
                 }
             return {
                 "url": clean_url,
@@ -105,10 +110,10 @@ def check_index(request: URLList):
 
 @app.get("/health")
 def health():
-    api_configured = GOOGLE_API_KEY != "YOUR_API_KEY_HERE"
+    api_configured = GOOGLE_API_KEY is not None
     return {
         "status": "ok",
-        "message": "ScanOps Backend chal raha hai!",
+        "message": "ScanOps Backend working!",
         "api_configured": api_configured,
         "version": "1.0.0"
     }
