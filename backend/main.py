@@ -2,15 +2,13 @@ import time
 import random
 import requests
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv()
 
 app = FastAPI(title="ScanOps API", version="1.0.0")
 
@@ -22,8 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-SEARCH_ENGINE_ID = os.getenv("SEARCH_ENGINE_ID")
+SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
 class URLList(BaseModel):
     urls: List[str]
@@ -39,49 +36,47 @@ def get_index_status(url: str) -> dict:
         clean_url = "https://" + clean_url
 
     try:
-        api_endpoint = "https://www.googleapis.com/customsearch/v1"
         params = {
-            "key": GOOGLE_API_KEY,
-            "cx": SEARCH_ENGINE_ID,
+            "engine": "google",
             "q": f"site:{clean_url}",
+            "api_key": SERPAPI_KEY,
             "num": 5,
-            "gl": "us",
-            "hl": "en",
         }
 
-        response = requests.get(api_endpoint, params=params, timeout=15)
+        response = requests.get(
+            "https://serpapi.com/search",
+            params=params,
+            timeout=15
+        )
         data = response.json()
 
-        if "error" in data:
-            error_code = data["error"]["code"]
-            error_msg = data["error"]["message"]
+        # Pehle results aur total nikalo
+        results = data.get("organic_results", [])
+        total = data.get("search_information", {}).get("total_results", 0)
 
-            if error_code == 429 or "quota" in error_msg.lower():
+        # Error handle karo
+        if "error" in data:
+            error_msg = data.get("error", "")
+            # Sirf no results wala case — Not Indexed hai
+            if "hasn't returned any results" in error_msg:
                 return {
                     "url": clean_url,
-                    "status": "Error",
-                    "message": "API daily limit khatam (100/day free). Kal try karo."
+                    "status": "Not Indexed",
+                    "message": "Google par yeh URL indexed nahi hai."
                 }
-            if error_code == 400 or "API key" in error_msg:
-                return {
-                    "url": clean_url,
-                    "status": "Error",
-                    "message": "API Key galat hai. .env file check karo."
-                }
+            # Real API error
             return {
                 "url": clean_url,
                 "status": "Error",
                 "message": f"API Error: {error_msg}"
             }
 
-        total_results = int(data.get("searchInformation", {}).get("totalResults", "0"))
-        items = data.get("items", [])
-
-        if total_results > 0 and len(items) > 0:
+        # Results check karo
+        if len(results) > 0:
             return {
                 "url": clean_url,
                 "status": "Indexed",
-                "message": f"Google par {total_results} page(s) indexed hain."
+                "message": f"Google par {total} page(s) indexed hain."
             }
         else:
             return {
@@ -110,10 +105,10 @@ def check_index(request: URLList):
 
 @app.get("/health")
 def health():
-    api_configured = GOOGLE_API_KEY is not None
+    api_configured = SERPAPI_KEY is not None
     return {
         "status": "ok",
-        "message": "ScanOps Backend working!",
+        "message": "ScanOps Backend chal raha hai!",
         "api_configured": api_configured,
         "version": "1.0.0"
     }
